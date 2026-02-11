@@ -128,8 +128,8 @@ export async function googleLogin(req: Request, res: Response) {
     res.cookie('token', token, {
       httpOnly: true,
       secure: config.nodeEnv === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      sameSite: config.nodeEnv === 'production' ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.json({
@@ -217,7 +217,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
         res.cookie('token', newJwt, {
           httpOnly: true,
           secure: config.nodeEnv === 'production',
-          sameSite: 'lax',
+          sameSite: config.nodeEnv === 'production' ? 'none' : 'lax',
           maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
