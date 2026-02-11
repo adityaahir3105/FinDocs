@@ -3,6 +3,7 @@ import { FileText, History, LogOut, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SubmissionForm } from './SubmissionForm';
 import { SubmissionHistory } from './SubmissionHistory';
+import { Footer } from './Footer';
 
 type View = 'submit' | 'history';
 
@@ -23,7 +24,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -98,9 +99,11 @@ export function Dashboard() {
       </div>
 
       {/* Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {currentView === 'submit' ? <SubmissionForm /> : <SubmissionHistory />}
       </main>
+
+      <Footer />
     </div>
   );
 }
