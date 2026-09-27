@@ -68,8 +68,14 @@ export async function extractWithGemini(image: Buffer, genai: GenAIClient = getC
     });
   } catch (error: any) {
     if (error?.status === 401 || error?.status === 403) {
+      if (/BILLING_DISABLED/i.test(error?.message || '') || /billing/i.test(error?.message || '')) {
+        throw new ExtractionError(
+          'Vertex AI requires billing to be enabled on your Google Cloud project. Please link a billing account in GCP Console (service account needs "Vertex AI User" role too).',
+          503
+        );
+      }
       throw new ExtractionError(
-        'Vertex AI refused the request. Check the service account has the "Vertex AI User" role and the Vertex AI API is enabled.',
+        'Vertex AI refused the request. Check the service account has the "Vertex AI User" role and the Vertex AI API and billing are enabled.',
         503
       );
     }
@@ -82,7 +88,7 @@ export async function extractWithGemini(image: Buffer, genai: GenAIClient = getC
     if (/default credentials|Could not load the default credentials|ENOENT.*vertex-key\.json/i.test(error?.message || '')) {
       throw new ExtractionError('Google Cloud credentials are not configured correctly. Check GOOGLE_APPLICATION_CREDENTIALS.', 503);
     }
-    throw new ExtractionError(error?.message || 'The Gemini service returned an error. Please try again.');
+    throw new ExtractionError('The Gemini service returned an error. Please try again.', 502);
   }
 
   const blocked = response.promptFeedback?.blockReason;
