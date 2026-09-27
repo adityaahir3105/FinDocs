@@ -183,7 +183,7 @@ export function logout(req: Request, res: Response) {
 }
 
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
-  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = req.cookies?.token || req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
 
   if (!token) {
     return res.status(401).json({
@@ -251,7 +251,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 }
 
 export function checkAuth(req: AuthRequest, res: Response) {
-  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = req.cookies?.token || req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
 
   if (!token) {
     return res.json({ authenticated: false });

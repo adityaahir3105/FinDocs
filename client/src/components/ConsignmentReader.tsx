@@ -79,7 +79,13 @@ export function ConsignmentReader() {
   useEffect(() => {
     getConsignmentFields()
       .then((r) => r.data && setFieldDefs(r.data))
-      .catch(() => setError('Could not load consignment fields. Is the server running?'));
+      .catch((err) => {
+        if (err?.response?.status === 401) {
+          setError('Session expired or authentication required. Please sign in again.');
+        } else {
+          setError('Could not load consignment fields. Is the server running?');
+        }
+      });
     getConsignmentWorkbookLink()
       .then((r) => setWorkbookLink(r.data?.workbookLink ?? null))
       .catch(() => undefined);
