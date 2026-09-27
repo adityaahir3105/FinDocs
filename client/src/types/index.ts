@@ -91,7 +91,8 @@ export interface ConsignmentExtraction {
   documents: { lorryReceipt: boolean; gatePass: boolean };
   readingNotes: string[];
   passes: number;
-  model: string;
+  /** Model used for each reading, in order. */
+  readers: string[];
   reviewIssues: ConsignmentIssue[];
   issues: ConsignmentIssue[];
 }
