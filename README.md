@@ -158,7 +158,7 @@ The **Consignments** tab reads a photo of a lorry receipt (LR) and/or port gate 
 No OCR is error-free on handwriting, so the app never writes a value nobody has checked:
 
 1. **Transcription, not interpretation** – Claude (vision) returns each field exactly as written, with a confidence level, as schema-validated JSON. It is told not to compute or fill in anything, so the checks below are independent.
-2. **Two independent readings** – the photo is read twice in parallel. Any field where the readings differ is flagged, with both values offered as one-click choices.
+2. **Two independent readings** – the photo is read twice in parallel, optionally by two different models (Claude and Gemini). Any field where the readings differ is flagged, with both values offered as one-click choices.
 3. **Deterministic checks** (`server/src/consignment/normalize.ts`):
    - Gross − Tare = Net on the LR and on the gate pass
    - LR weights match gate-pass weights (kg converted to MT)
@@ -179,10 +179,54 @@ Add to `server/.env`:
 ANTHROPIC_API_KEY=your-anthropic-api-key
 # Optional
 # ANTHROPIC_MODEL=claude-opus-5
-# CONSIGNMENT_EXTRACTION_PASSES=2
+# CONSIGNMENT_READERS=claude,claude
 ```
 
-Each photo costs 2 model calls by default (one per reading). Set `CONSIGNMENT_EXTRACTION_PASSES=1` to halve the cost, at the price of losing the disagreement check.
+`CONSIGNMENT_READERS` chooses the model for each independent reading: `claude`, `gemini`, or a mix such as `claude,gemini`. A mix is recommended: two different models rarely misread the same digit the same way, so the disagreement check catches more. Each reading is one paid model call.
+
+#### Gemini on Vertex AI
+
+Needed only when `CONSIGNMENT_READERS` includes `gemini`. Uses a Google Cloud project with billing enabled.
+
+```bash
+PROJECT=your-gcp-project-id
+gcloud config set project $PROJECT
+gcloud services enable aiplatform.googleapis.com
+```
+
+**Local development:** sign in once with your own account, then set the project:
+
+```bash
+gcloud auth application-default login
+```
+
+```env
+CONSIGNMENT_READERS=claude,gemini
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+```
+
+**Production (e.g. Render):** use a service account that can only call Vertex AI:
+
+```bash
+gcloud iam service-accounts create findocs-vertex --display-name="FinDocs Vertex AI"
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member="serviceAccount:findocs-vertex@$PROJECT.iam.gserviceaccount.com" \
+  --role="roles/aiplatform.user"
+gcloud iam service-accounts keys create vertex-key.json \
+  --iam-account="findocs-vertex@$PROJECT.iam.gserviceaccount.com"
+```
+
+On Render, add `vertex-key.json` as a **Secret File** (it is mounted at `/etc/secrets/vertex-key.json`), then set:
+
+```env
+CONSIGNMENT_READERS=claude,gemini
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_APPLICATION_CREDENTIALS=/etc/secrets/vertex-key.json
+```
+
+Delete the local `vertex-key.json` afterwards and never commit it.
+
+Optional: `GOOGLE_CLOUD_LOCATION` (default `global`), `GEMINI_MODEL` (default `gemini-3.8-flash`), `GEMINI_MEDIA_RESOLUTION` (`high` default, or `ultra_high`), `GEMINI_THINKING_LEVEL` (`low` / `medium` default / `high`).
 
 ### Endpoints
 

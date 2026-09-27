@@ -83,5 +83,12 @@ app.listen(config.port, () => {
   console.log(`Google Client Secret: ${config.google.clientSecret ? 'SET' : 'NOT SET'}`);
   console.log(`Google Redirect URI: ${config.google.redirectUri}`);
   console.log(`Storage: Google Drive (user OAuth with refresh tokens)`);
-  console.log(`Consignment reader: ${config.anthropic.apiKey ? `${config.anthropic.model}, ${config.anthropic.extractionPasses} pass(es)` : 'DISABLED (ANTHROPIC_API_KEY not set)'}`);
+  const readers = config.consignments.readers.map((r) => (r === 'claude' ? config.anthropic.model : config.gemini.model));
+  console.log(`Consignment readers: ${readers.join(' + ')}`);
+  if (config.consignments.readers.includes('claude') && !config.anthropic.apiKey) {
+    console.warn('WARNING: ANTHROPIC_API_KEY is not set; consignment extraction will fail');
+  }
+  if (config.consignments.readers.includes('gemini') && !config.gemini.project) {
+    console.warn('WARNING: GOOGLE_CLOUD_PROJECT is not set; consignment extraction will fail');
+  }
 });

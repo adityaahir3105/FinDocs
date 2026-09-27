@@ -5,31 +5,14 @@ import { config } from '../config';
 import { extractionSchema, Extraction, Confidence, ExtractedField } from './schema';
 import { FIELD_DEFS } from './fields';
 import { canonicalize, comparisonKey, Issue } from './normalize';
+import { ExtractionError } from './errors';
+import { SYSTEM_PROMPT, USER_PROMPT } from './prompt';
+import { extractWithGemini } from './geminiReader';
+
+export { ExtractionError } from './errors';
 
 // Largest long edge the current Claude vision models read at full resolution.
 const MAX_IMAGE_EDGE = 2576;
-
-const SYSTEM_PROMPT = `You transcribe photographed Indian road-transport paperwork for a logistics company's records. The records feed accounting, so a wrong digit is far worse than a field marked unreadable.
-
-A photo usually shows one or both of:
-- a lorry receipt (LR / consignment note / builty) from a transport contractor: LR number, date, truck number, consignor, consignee, from/to, material, gross/tare/net weight (usually MT with 3 decimals), freight.
-- a port or customs gate pass (e.g. "Gate Pass Import" at Deendayal Port / Kandla) from a clearing agent: serial number, date, shift, importer, goods, truck number, bill of entry, wharfage entry, vessel, G.Wt/T.Wt/N.Wt (usually kg).
-
-The paper may be rotated, folded, overlapping, or photographed at an angle, and most values are handwritten.
-
-Rules:
-- Transcribe what is written; do not correct, complete, or compute anything. If net weight is blank, leave it null even if gross and tare are present. Do not copy a value from one document into the other.
-- Keep numbers exactly as written, including the decimal point and every digit.
-- Dates in these documents are day/month/year.
-- Handwriting in the wrong row still belongs to the field it was written for; use the printed labels and position to decide, and mention the misplacement in reading_notes.
-- When a character could be read two ways (1/7, 0/6, 5/6, 3/8, 4/9, B/8, S/5, O/0), lower the confidence and give both readings in reading_notes.
-- Stamps, signatures and printed form text that is not a filled-in value are not field values.`;
-
-export class ExtractionError extends Error {
-  constructor(message: string, public status = 502) {
-    super(message);
-  }
-}
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -54,24 +37,39 @@ export async function prepareImage(input: Buffer, rotateDegrees = 0): Promise<Bu
   }
 }
 
-async function extractOnce(image: Buffer): Promise<Extraction> {
-  const response = await getClient().beta.messages.parse({
-    model: config.anthropic.model,
-    max_tokens: 16000,
-    ...(config.anthropic.fallbacks ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
-    thinking: { type: 'adaptive' },
-    output_config: { effort: 'high', format: betaZodOutputFormat(extractionSchema) },
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image.toString('base64') } },
-          { type: 'text', text: 'Transcribe the lorry receipt and gate pass in this photo.' },
-        ],
-      },
-    ],
-  });
+async function extractWithClaude(image: Buffer): Promise<Extraction> {
+  let response;
+  try {
+    response = await getClient().beta.messages.parse({
+      model: config.anthropic.model,
+      max_tokens: 16000,
+      ...(config.anthropic.fallbacks ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
+      thinking: { type: 'adaptive' },
+      output_config: { effort: 'high', format: betaZodOutputFormat(extractionSchema) },
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image.toString('base64') } },
+            { type: 'text', text: USER_PROMPT },
+          ],
+        },
+      ],
+    });
+  } catch (error) {
+    if (error instanceof Anthropic.AuthenticationError) {
+      throw new ExtractionError('The server ANTHROPIC_API_KEY was rejected', 503);
+    }
+    if (error instanceof Anthropic.RateLimitError) {
+      throw new ExtractionError('The AI service is busy. Please wait a minute and try again.', 429);
+    }
+    if (error instanceof Anthropic.APIError) {
+      console.error('Anthropic API error:', error.status, error.message);
+      throw new ExtractionError('The AI service returned an error. Please try again.');
+    }
+    throw error;
+  }
 
   if (response.stop_reason === 'refusal') {
     throw new ExtractionError('The model declined to read this image.');
@@ -83,6 +81,17 @@ async function extractOnce(image: Buffer): Promise<Extraction> {
     throw new ExtractionError('The model did not return a valid result. Please try again.');
   }
   return response.parsed_output;
+}
+
+export type ReaderName = 'claude' | 'gemini';
+
+const READERS: Record<ReaderName, (image: Buffer) => Promise<Extraction>> = {
+  claude: extractWithClaude,
+  gemini: (image) => extractWithGemini(image),
+};
+
+export function readerModel(reader: ReaderName): string {
+  return reader === 'claude' ? config.anthropic.model : config.gemini.model;
 }
 
 export interface FieldResult {
@@ -98,7 +107,8 @@ export interface ExtractionResult {
   documents: { lorryReceipt: boolean; gatePass: boolean };
   readingNotes: string[];
   passes: number;
-  model: string;
+  /** Model used for each reading, in order. */
+  readers: string[];
   reviewIssues: Issue[];
 }
 
@@ -114,7 +124,7 @@ function sourceField(extraction: Extraction, section: 'lr' | 'gp', source: strin
  * field is flagged for review with every reading offered, instead of silently
  * picking one.
  */
-export function mergePasses(passes: Extraction[]): Omit<ExtractionResult, 'model'> {
+export function mergePasses(passes: Extraction[]): Omit<ExtractionResult, 'readers'> {
   const fields: Record<string, FieldResult> = {};
   const reviewIssues: Issue[] = [];
 
@@ -169,25 +179,19 @@ export function mergePasses(passes: Extraction[]): Omit<ExtractionResult, 'model
 
 export async function extractConsignment(image: Buffer, rotateDegrees = 0): Promise<ExtractionResult> {
   const prepared = await prepareImage(image, rotateDegrees);
-  const passCount = Math.max(1, config.anthropic.extractionPasses);
+  const readers = config.consignments.readers;
 
-  let passes: Extraction[];
-  try {
-    passes = await Promise.all(Array.from({ length: passCount }, () => extractOnce(prepared)));
-  } catch (error) {
-    if (error instanceof ExtractionError) throw error;
-    if (error instanceof Anthropic.AuthenticationError) {
-      throw new ExtractionError('The server ANTHROPIC_API_KEY was rejected', 503);
-    }
-    if (error instanceof Anthropic.RateLimitError) {
-      throw new ExtractionError('The AI service is busy. Please wait a minute and try again.', 429);
-    }
-    if (error instanceof Anthropic.APIError) {
-      console.error('Anthropic API error:', error.status, error.message);
-      throw new ExtractionError('The AI service returned an error. Please try again.');
-    }
-    throw error;
-  }
+  // Every reading must succeed: silently dropping one would also drop the disagreement check.
+  const passes = await Promise.all(
+    readers.map((reader) =>
+      READERS[reader](prepared).catch((error) => {
+        if (error instanceof ExtractionError && readers.length > 1) {
+          throw new ExtractionError(`${readerModel(reader)}: ${error.message}`, error.status);
+        }
+        throw error;
+      })
+    )
+  );
 
-  return { ...mergePasses(passes), model: config.anthropic.model };
+  return { ...mergePasses(passes), readers: readers.map(readerModel) };
 }

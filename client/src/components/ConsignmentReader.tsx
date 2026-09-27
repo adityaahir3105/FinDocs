@@ -510,7 +510,8 @@ function ChecksPanel({
         </details>
       )}
       <p className="text-xs text-gray-400">
-        Read {extraction.passes}× independently; fields where the readings differ are flagged.
+        Read {extraction.passes}× independently ({extraction.readers.join(' + ')}); fields where the readings differ
+        are flagged.
       </p>
     </div>
   );
