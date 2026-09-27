@@ -66,27 +66,23 @@ export async function extractWithGemini(image: Buffer, genai: GenAIClient = getC
         maxOutputTokens: 16000,
       },
     });
-  } catch (error) {
-    if (error instanceof ApiError) {
-      console.error('Vertex AI error:', error.status, error.message);
-      if (error.status === 401 || error.status === 403) {
-        throw new ExtractionError(
-          'Vertex AI refused the request. Check the service account has the "Vertex AI User" role and the Vertex AI API is enabled.',
-          503
-        );
-      }
-      if (error.status === 404) {
-        throw new ExtractionError(`Gemini model "${config.gemini.model}" was not found in location "${config.gemini.location}".`, 503);
-      }
-      if (error.status === 429) {
-        throw new ExtractionError('The AI service is busy. Please wait a minute and try again.', 429);
-      }
-      throw new ExtractionError('The Gemini service returned an error. Please try again.');
+  } catch (error: any) {
+    if (error?.status === 401 || error?.status === 403) {
+      throw new ExtractionError(
+        'Vertex AI refused the request. Check the service account has the "Vertex AI User" role and the Vertex AI API is enabled.',
+        503
+      );
     }
-    if (error instanceof Error && /default credentials|Could not load the default credentials/i.test(error.message)) {
-      throw new ExtractionError('Google Cloud credentials are not configured on the server (needed for Gemini on Vertex AI)', 503);
+    if (error?.status === 404) {
+      throw new ExtractionError(`Gemini model "${config.gemini.model}" was not found in location "${config.gemini.location}".`, 503);
     }
-    throw error;
+    if (error?.status === 429) {
+      throw new ExtractionError('The AI service is busy. Please wait a minute and try again.', 429);
+    }
+    if (/default credentials|Could not load the default credentials|ENOENT.*vertex-key\.json/i.test(error?.message || '')) {
+      throw new ExtractionError('Google Cloud credentials are not configured correctly. Check GOOGLE_APPLICATION_CREDENTIALS.', 503);
+    }
+    throw new ExtractionError(error?.message || 'The Gemini service returned an error. Please try again.');
   }
 
   const blocked = response.promptFeedback?.blockReason;

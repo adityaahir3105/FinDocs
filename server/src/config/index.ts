@@ -57,7 +57,7 @@ export const config = {
     // Vertex AI; credentials come from Application Default Credentials.
     project: process.env.GOOGLE_CLOUD_PROJECT || '',
     location: process.env.GOOGLE_CLOUD_LOCATION || 'global',
-    model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
     mediaResolution: (process.env.GEMINI_MEDIA_RESOLUTION || 'high').toLowerCase(), // high | ultra_high
     thinkingLevel: (process.env.GEMINI_THINKING_LEVEL || 'medium').toLowerCase(), // low | medium | high
   },
