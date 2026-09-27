@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import { config } from './config';
 import authRoutes from './routes/auth';
 import submitRoutes from './routes/submit';
+import consignmentRoutes from './routes/consignments';
 
 const app = express();
 
@@ -39,10 +40,20 @@ const submitLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const extractLimiter = rateLimit({
+  windowMs: config.rateLimit.windowMs,
+  max: config.rateLimit.extractMax,
+  message: { success: false, message: 'Too many photos read, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use(generalLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/submit', submitLimiter, submitRoutes);
+app.use('/api/consignments/extract', extractLimiter);
+app.use('/api/consignments', consignmentRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -72,4 +83,5 @@ app.listen(config.port, () => {
   console.log(`Google Client Secret: ${config.google.clientSecret ? 'SET' : 'NOT SET'}`);
   console.log(`Google Redirect URI: ${config.google.redirectUri}`);
   console.log(`Storage: Google Drive (user OAuth with refresh tokens)`);
+  console.log(`Consignment reader: ${config.anthropic.apiKey ? `${config.anthropic.model}, ${config.anthropic.extractionPasses} pass(es)` : 'DISABLED (ANTHROPIC_API_KEY not set)'}`);
 });

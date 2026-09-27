@@ -28,10 +28,27 @@ export const config = {
     ],
   },
   
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY || '',
+    model: process.env.ANTHROPIC_MODEL || 'claude-opus-5',
+    // Independent readings per photo; fields where they disagree are flagged for review.
+    extractionPasses: parseInt(process.env.CONSIGNMENT_EXTRACTION_PASSES || '2', 10),
+    // Server-side retry on another model if the requested one declines.
+    fallbacks: process.env.ANTHROPIC_FALLBACKS !== 'off',
+  },
+
+  consignments: {
+    maxImageSize: 15 * 1024 * 1024, // 15MB (phone photos); resized before sending to the model
+    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+    workbookName: 'FinDocs Consignments.xlsx',
+    imagesFolderName: 'FinDocs Consignment Photos',
+  },
+
   rateLimit: {
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // limit each IP to 100 requests per windowMs
     submitMax: 10, // stricter limit for submissions
+    extractMax: 40, // each extraction is a paid AI call
   },
   
   cors: {
