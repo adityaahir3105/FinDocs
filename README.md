@@ -302,7 +302,7 @@ export class S3StorageProvider extends BaseStorageProvider {
 ## Security Features
 
 - **OAuth 2.0**: Google Sign-In with minimal scopes (`drive.file`)
-- **JWT Tokens**: HTTP-only cookies for session management
+- **Sessions**: signed JWT in an HTTP-only cookie, also sent as a Bearer token for browsers that block cross-site cookies (Safari); the Google tokens inside are encrypted (AES-256-GCM)
 - **Rate Limiting**: 100 requests per 15 minutes per IP
 - **CORS**: Configurable origin whitelist
 - **Helmet**: Security headers

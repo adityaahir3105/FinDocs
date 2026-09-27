@@ -74,6 +74,10 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
+if (config.nodeEnv === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) {
+  console.error('WARNING: JWT_SECRET is unset or shorter than 32 characters. Anyone who knows it can forge sessions; set a long random value.');
+}
+
 if (!config.google.clientId) {
   console.error('ERROR: GOOGLE_CLIENT_ID is not set');
   process.exit(1);

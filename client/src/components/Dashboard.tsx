@@ -25,7 +25,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50 pb-16 sm:pb-0">
       {/* Header */}
       <header className="bg-white shadow-xs border-b">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -114,7 +114,7 @@ export function Dashboard() {
       </div>
 
       {/* Content */}
-      <main className="flex-1 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 w-full pb-20 sm:pb-8">
+      <main className="flex-1 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 w-full">
         {currentView === 'submit' && <SubmissionForm />}
         {currentView === 'history' && <SubmissionHistory />}
         {currentView === 'consignments' && <ConsignmentReader />}

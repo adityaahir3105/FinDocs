@@ -1,5 +1,4 @@
 import {
-  ApiError,
   FinishReason,
   GoogleGenAI,
   PartMediaResolutionLevel,
@@ -67,6 +66,8 @@ export async function extractWithGemini(image: Buffer, genai: GenAIClient = getC
       },
     });
   } catch (error: any) {
+    // Log the raw error: the user-facing messages below are deliberately generic.
+    console.error('Vertex AI error:', error?.status ?? '', error?.message ?? error);
     if (error?.status === 401 || error?.status === 403) {
       if (/BILLING_DISABLED/i.test(error?.message || '') || /billing/i.test(error?.message || '')) {
         throw new ExtractionError(
@@ -85,7 +86,7 @@ export async function extractWithGemini(image: Buffer, genai: GenAIClient = getC
     if (error?.status === 429) {
       throw new ExtractionError('The AI service is busy. Please wait a minute and try again.', 429);
     }
-    if (/default credentials|Could not load the default credentials|ENOENT.*vertex-key\.json/i.test(error?.message || '')) {
+    if (/default credentials|ENOENT/i.test(error?.message || '')) {
       throw new ExtractionError('Google Cloud credentials are not configured correctly. Check GOOGLE_APPLICATION_CREDENTIALS.', 503);
     }
     throw new ExtractionError('The Gemini service returned an error. Please try again.', 502);

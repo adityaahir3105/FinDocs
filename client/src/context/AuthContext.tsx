@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthState } from '../types';
-import { checkAuth, googleLogin, logout as apiLogout } from '../api/client';
+import { checkAuth, googleLogin, logout as apiLogout, SESSION_EXPIRED_EVENT } from '../api/client';
 
 interface AuthContextType extends AuthState {
   loginWithGoogle: (code: string) => Promise<void>;
@@ -28,6 +28,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         setState({ isAuthenticated: false, user: null, loading: false });
       });
+  }, []);
+
+  useEffect(() => {
+    const onExpired = () => setState({ isAuthenticated: false, user: null, loading: false });
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
 
   const loginWithGoogle = async (code: string) => {
