@@ -60,3 +60,44 @@ export interface SubmissionSummary {
   folderLink: string;
   createdTime: string;
 }
+
+// Consignment reader
+export type FieldKind = 'text' | 'date' | 'weight' | 'amount' | 'truck';
+
+export interface ConsignmentFieldDef {
+  key: string;
+  label: string;
+  section: 'lr' | 'gp';
+  kind: FieldKind;
+  required?: boolean;
+}
+
+export interface ConsignmentIssue {
+  id: string;
+  severity: 'error' | 'warning';
+  fields: string[];
+  message: string;
+}
+
+export interface ConsignmentFieldResult {
+  value: string;
+  raw: string | null;
+  confidence: 'high' | 'medium' | 'low';
+  alternatives: string[];
+}
+
+export interface ConsignmentExtraction {
+  fields: Record<string, ConsignmentFieldResult>;
+  documents: { lorryReceipt: boolean; gatePass: boolean };
+  readingNotes: string[];
+  passes: number;
+  model: string;
+  reviewIssues: ConsignmentIssue[];
+  issues: ConsignmentIssue[];
+}
+
+export interface ConsignmentAppendResult {
+  rowNumber: number;
+  workbookLink: string;
+  sourcePhotoLink?: string;
+}

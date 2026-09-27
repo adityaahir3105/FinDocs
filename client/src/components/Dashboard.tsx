@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { FileText, History, LogOut, User } from 'lucide-react';
+import { FileText, History, LogOut, ScanText, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SubmissionForm } from './SubmissionForm';
 import { SubmissionHistory } from './SubmissionHistory';
+import { ConsignmentReader } from './ConsignmentReader';
 import { Footer } from './Footer';
 
-type View = 'submit' | 'history';
+type View = 'submit' | 'history' | 'consignments';
 
 export function Dashboard() {
   const { user, logout } = useAuth();
@@ -94,13 +95,26 @@ export function Dashboard() {
               <History className="w-4 h-4" />
               My Submissions
             </button>
+            <button
+              onClick={() => setCurrentView('consignments')}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                currentView === 'consignments'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <ScanText className="w-4 h-4" />
+              Consignments
+            </button>
           </nav>
         </div>
       </div>
 
       {/* Content */}
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        {currentView === 'submit' ? <SubmissionForm /> : <SubmissionHistory />}
+        {currentView === 'submit' && <SubmissionForm />}
+        {currentView === 'history' && <SubmissionHistory />}
+        {currentView === 'consignments' && <ConsignmentReader />}
       </main>
 
       <Footer />

@@ -130,4 +130,50 @@ export class GoogleDriveProvider extends BaseStorageProvider {
       return [];
     }
   }
+
+  /** Finds a file this app created, tagged with appProperties.type. drive.file scope only sees app-created files. */
+  async findAppFile(type: string): Promise<{ fileId: string; fileLink: string } | null> {
+    const response = await this.drive.files.list({
+      q: `appProperties has { key='createdBy' and value='FinDocs' } and appProperties has { key='type' and value='${type}' } and trashed=false`,
+      fields: 'files(id, webViewLink)',
+      orderBy: 'createdTime',
+      pageSize: 1,
+    });
+    const file = response.data.files?.[0];
+    if (!file?.id) return null;
+    return { fileId: file.id, fileLink: file.webViewLink || `https://drive.google.com/file/d/${file.id}` };
+  }
+
+  async createAppFile(
+    type: string,
+    name: string,
+    mimeType: string,
+    buffer?: Buffer,
+    parentId?: string
+  ): Promise<{ fileId: string; fileLink: string }> {
+    const response = await this.drive.files.create({
+      requestBody: {
+        name,
+        mimeType,
+        parents: parentId ? [parentId] : undefined,
+        appProperties: { createdBy: 'FinDocs', type },
+      },
+      media: buffer ? { mimeType, body: Readable.from(buffer) } : undefined,
+      fields: 'id, webViewLink',
+    });
+    const fileId = response.data.id!;
+    return { fileId, fileLink: response.data.webViewLink || `https://drive.google.com/file/d/${fileId}` };
+  }
+
+  async downloadFile(fileId: string): Promise<Buffer> {
+    const response = await this.drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
+    return Buffer.from(response.data as ArrayBuffer);
+  }
+
+  async updateFileContent(fileId: string, mimeType: string, buffer: Buffer): Promise<void> {
+    await this.drive.files.update({
+      fileId,
+      media: { mimeType, body: Readable.from(buffer) },
+    });
+  }
 }

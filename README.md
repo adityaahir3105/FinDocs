@@ -149,6 +149,54 @@ Click "Continue with Google" to sign in. Documents will be uploaded to your pers
 | POST | `/api/submit` | Submit documents |
 | GET | `/api/health` | Health check |
 
+## Consignment Reader (photo → Excel)
+
+The **Consignments** tab reads a photo of a lorry receipt (LR) and/or port gate pass and appends one row per consignment to `FinDocs Consignments.xlsx` in the user's Google Drive.
+
+### How accuracy is protected
+
+No OCR is error-free on handwriting, so the app never writes a value nobody has checked:
+
+1. **Transcription, not interpretation** – Claude (vision) returns each field exactly as written, with a confidence level, as schema-validated JSON. It is told not to compute or fill in anything, so the checks below are independent.
+2. **Two independent readings** – the photo is read twice in parallel. Any field where the readings differ is flagged, with both values offered as one-click choices.
+3. **Deterministic checks** (`server/src/consignment/normalize.ts`):
+   - Gross − Tare = Net on the LR and on the gate pass
+   - LR weights match gate-pass weights (kg converted to MT)
+   - LR truck number matches gate-pass truck number, and is a valid Indian registration
+   - Dates are real day/month/year dates and not in the future
+   - Required fields are present (LR No, LR Date, Truck No, Net Wt)
+4. **Human review** – every flagged field must be ticked "Checked against photo" or edited, and every failed check must be fixed or explicitly overridden. The server re-runs the checks before writing.
+5. **Duplicates** – a row with the same LR No + truck, or the same gate-pass number, needs explicit confirmation.
+6. **Audit trail** – the original photo is saved to Drive and linked from the row, along with any overridden checks and who appended it.
+
+Tips: rotate the photo upright in the app before reading; send original-resolution photos (WhatsApp compresses images unless sent as a document).
+
+### Setup
+
+Add to `server/.env`:
+
+```env
+ANTHROPIC_API_KEY=your-anthropic-api-key
+# Optional
+# ANTHROPIC_MODEL=claude-opus-5
+# CONSIGNMENT_EXTRACTION_PASSES=2
+```
+
+Each photo costs 2 model calls by default (one per reading). Set `CONSIGNMENT_EXTRACTION_PASSES=1` to halve the cost, at the price of losing the disagreement check.
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/consignments/fields` | Field definitions (drives the review form and Excel columns) |
+| POST | `/api/consignments/extract` | Multipart `image` (+ `rotate`) → readings, flags, checks |
+| POST | `/api/consignments/validate` | Re-run checks on edited values |
+| POST | `/api/consignments/append` | Multipart `payload` JSON + `image` → append row to Drive workbook |
+| GET | `/api/consignments/workbook` | Download the workbook |
+| GET | `/api/consignments/workbook/link` | Drive link to the workbook |
+
+Tests: `cd server && npm test`
+
 ## Document Types
 
 - Aadhaar Card
