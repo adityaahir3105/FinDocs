@@ -245,29 +245,29 @@ export function ConsignmentReader() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Read Consignment</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Read Consignment</h1>
+          <p className="text-xs sm:text-sm text-gray-500">
             Photo of LR / gate pass → check every value → append a row to your Excel sheet.
           </p>
         </div>
         {workbookLink && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <a
               href={workbookLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
             >
-              <FileSpreadsheet className="w-4 h-4" /> Open in Drive
+              <FileSpreadsheet className="w-4 h-4 shrink-0" /> Open in Drive
             </a>
             <button
               onClick={download}
-              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
             >
-              <Download className="w-4 h-4" /> Download .xlsx
+              <Download className="w-4 h-4 shrink-0" /> Download .xlsx
             </button>
           </div>
         )}
@@ -298,10 +298,10 @@ export function ConsignmentReader() {
       )}
 
       {(stage === 'upload' || stage === 'reading') && (
-        <div className="bg-white rounded-xl shadow-sm border p-6 space-y-4">
+        <div className="bg-white rounded-xl shadow-sm border p-4 sm:p-6 space-y-4">
           {!file ? (
             <label
-              className="block border-2 border-dashed border-gray-300 rounded-lg p-10 text-center cursor-pointer hover:border-gray-400 bg-gray-50"
+              className="block border-2 border-dashed border-gray-300 rounded-lg p-6 sm:p-10 text-center cursor-pointer hover:border-gray-400 bg-gray-50"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
@@ -314,8 +314,8 @@ export function ConsignmentReader() {
                 className="hidden"
                 onChange={(e) => selectFile(e.target.files?.[0])}
               />
-              <Upload className="w-10 h-10 mx-auto text-gray-400 mb-3" />
-              <p className="text-gray-700 font-medium">Take or choose a photo of the consignment</p>
+              <Upload className="w-8 h-8 sm:w-10 sm:h-10 mx-auto text-gray-400 mb-2 sm:mb-3" />
+              <p className="text-sm sm:text-base text-gray-700 font-medium">Take or choose a photo of the consignment</p>
               <p className="text-xs text-gray-500 mt-1">
                 JPG, PNG or WEBP. For best accuracy: flat paper, good light, whole document in frame, original
                 resolution (WhatsApp compresses photos — send as “Document”).
@@ -324,7 +324,7 @@ export function ConsignmentReader() {
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-gray-600">
+                <p className="text-xs sm:text-sm text-gray-600">
                   Rotate until the text reads upright — the AI reads the photo exactly as shown.
                 </p>
                 <div className="flex gap-2">
@@ -349,14 +349,14 @@ export function ConsignmentReader() {
                 </div>
               </div>
               {preview && (
-                <img src={preview} alt="Consignment" className="max-h-[70vh] mx-auto rounded border object-contain" />
+                <img src={preview} alt="Consignment" className="max-h-[70vh] mx-auto rounded border object-contain w-full" />
               )}
-              <div className="flex flex-wrap justify-end gap-3">
-                <Button variant="outline" onClick={reset} disabled={stage === 'reading'}>
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+                <Button variant="outline" onClick={reset} disabled={stage === 'reading'} className="w-full sm:w-auto">
                   Choose another photo
                 </Button>
-                <Button onClick={readPhoto} loading={stage === 'reading'}>
-                  <ScanText className="w-4 h-4" />
+                <Button onClick={readPhoto} loading={stage === 'reading'} className="w-full sm:w-auto">
+                  <ScanText className="w-4 h-4 shrink-0" />
                   {stage === 'reading' ? 'Reading… (up to a minute)' : 'Read photo'}
                 </Button>
               </div>
@@ -444,12 +444,12 @@ export function ConsignmentReader() {
               </div>
             )}
 
-            <div className="flex flex-wrap justify-end gap-3">
-              <Button variant="outline" onClick={reset} disabled={saving}>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-2">
+              <Button variant="outline" onClick={reset} disabled={saving} className="w-full sm:w-auto">
                 Discard
               </Button>
-              <Button onClick={() => save(false)} loading={saving} disabled={blocking.length > 0 || checking || !!duplicates}>
-                <FileSpreadsheet className="w-4 h-4" />
+              <Button onClick={() => save(false)} loading={saving} disabled={blocking.length > 0 || checking || !!duplicates} className="w-full sm:w-auto">
+                <FileSpreadsheet className="w-4 h-4 shrink-0" />
                 {blocking.length ? `${blocking.length} item(s) to check` : 'Append to Excel'}
               </Button>
             </div>

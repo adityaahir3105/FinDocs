@@ -10,6 +10,9 @@ import consignmentRoutes from './routes/consignments';
 
 const app = express();
 
+// Trust reverse proxy (Render, Cloudflare, etc.) so Express correctly identifies client IPs from X-Forwarded-For
+app.set('trust proxy', 1);
+
 app.use(helmet());
 
 app.use(cors({
@@ -30,6 +33,7 @@ const generalLimiter = rateLimit({
   message: { success: false, message: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 const submitLimiter = rateLimit({
@@ -38,6 +42,7 @@ const submitLimiter = rateLimit({
   message: { success: false, message: 'Too many submissions, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 const extractLimiter = rateLimit({
@@ -46,6 +51,7 @@ const extractLimiter = rateLimit({
   message: { success: false, message: 'Too many photos read, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 app.use(generalLimiter);
