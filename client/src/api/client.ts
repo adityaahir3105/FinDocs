@@ -15,6 +15,8 @@ const api = axios.create({
   withCredentials: true,
 });
 
+export const SESSION_EXPIRED_EVENT = 'findocs:session-expired';
+
 // Attach Authorization header if token is stored (resolves Safari / iOS third-party cookie blocking)
 api.interceptors.request.use((reqConfig) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
@@ -37,6 +39,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('auth_token');
+      // Let the app return to the sign-in screen instead of failing request by request.
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
     }
     return Promise.reject(error);
   }
@@ -61,18 +65,13 @@ export async function logout(): Promise<void> {
 }
 
 export async function checkAuth(): Promise<{ authenticated: boolean; user?: User }> {
-  try {
-    const response = await api.get('/auth/check');
-    if (!response.data?.authenticated && typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-    }
-    return response.data;
-  } catch (error) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-    }
-    return { authenticated: false };
+  // Network errors (offline, server waking up) propagate without discarding the stored
+  // token; only the server saying the session is invalid clears it.
+  const response = await api.get('/auth/check');
+  if (!response.data?.authenticated && typeof window !== 'undefined') {
+    localStorage.removeItem('auth_token');
   }
+  return response.data;
 }
 
 export async function getSubmissionHistory(): Promise<{ success: boolean; data?: SubmissionSummary[]; message?: string }> {

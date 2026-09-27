@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { google } from 'googleapis';
 import { config } from '../config';
+import { sealGoogleTokens, openGoogleTokens, GoogleTokens } from '../utils/tokenSeal';
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -11,14 +12,65 @@ export interface AuthRequest extends Request {
   tokenExpiry?: number;
 }
 
-interface TokenPayload {
+interface SessionUser {
   userId: string;
   email: string;
   name?: string;
   picture?: string;
-  accessToken: string;
-  refreshToken: string;
+}
+
+/** What the session JWT carries. Google tokens are sealed (encrypted), see utils/tokenSeal. */
+interface TokenPayload extends SessionUser {
+  google: string;
   tokenExpiry: number;
+}
+
+type Session = SessionUser & GoogleTokens & { tokenExpiry: number };
+
+const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Cross-site in production (Vercel page, Render API), so the cookie must be SameSite=None; Secure.
+// Clearing it needs the same attributes, or browsers ignore the clear on cross-site responses.
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: config.nodeEnv === 'production',
+  sameSite: config.nodeEnv === 'production' ? ('none' as const) : ('lax' as const),
+  path: '/',
+};
+
+/** Signs a new session, sets the cookie, and returns the token (also used as a Bearer token). */
+function issueSession(res: Response, session: Session): string {
+  const { accessToken, refreshToken, ...rest } = session;
+  const payload: TokenPayload = { ...rest, google: sealGoogleTokens({ accessToken, refreshToken }) };
+  const token = jwt.sign(payload, config.jwt.secret, {
+    expiresIn: config.jwt.expiresIn as jwt.SignOptions['expiresIn'],
+  });
+  res.cookie('token', token, { ...COOKIE_OPTIONS, maxAge: SESSION_MAX_AGE_MS });
+  return token;
+}
+
+/**
+ * Returns the first valid session from the Authorization header or the cookie.
+ * Both can be present (cookie where the browser allows it, header for Safari);
+ * a stale one must not hide a valid one.
+ */
+function readSession(req: Request): { session: Session | null; presented: boolean } {
+  const bearer = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
+  const candidates = [bearer, req.cookies?.token].filter((t): t is string => !!t);
+  for (const token of candidates) {
+    try {
+      const p = jwt.verify(token, config.jwt.secret) as TokenPayload;
+      const google = openGoogleTokens(p.google);
+      if (!google) continue;
+      return {
+        session: { userId: p.userId, email: p.email, name: p.name, picture: p.picture, tokenExpiry: p.tokenExpiry, ...google },
+        presented: true,
+      };
+    } catch {
+      // try the next candidate
+    }
+  }
+  return { session: null, presented: candidates.length > 0 };
 }
 
 function getOAuth2Client() {
@@ -111,7 +163,7 @@ export async function googleLogin(req: Request, res: Response) {
 
     const tokenExpiry = tokens.expiry_date || Date.now() + 3600 * 1000;
 
-    const jwtPayload: TokenPayload = {
+    const token = issueSession(res, {
       userId: userInfo.id,
       email: userInfo.email,
       name: userInfo.name || undefined,
@@ -119,17 +171,6 @@ export async function googleLogin(req: Request, res: Response) {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token || '',
       tokenExpiry,
-    };
-
-    const token = jwt.sign(jwtPayload, config.jwt.secret, {
-      expiresIn: config.jwt.expiresIn as jwt.SignOptions['expiresIn'],
-    });
-
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: config.nodeEnv === 'production',
-      sameSite: config.nodeEnv === 'production' ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.json({
@@ -178,97 +219,56 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
 }
 
 export function logout(req: Request, res: Response) {
-  res.clearCookie('token');
+  res.clearCookie('token', COOKIE_OPTIONS);
   return res.json({ success: true });
 }
 
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
-  const token = req.cookies?.token || req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
+  const { session, presented } = readSession(req);
 
-  if (!token) {
+  if (!session) {
     return res.status(401).json({
       success: false,
-      message: 'Authentication required',
+      message: presented ? 'Session expired. Please sign in again.' : 'Authentication required',
     });
   }
 
-  try {
-    const decoded = jwt.verify(token, config.jwt.secret) as TokenPayload;
+  let current = session;
+  const bufferTime = 5 * 60 * 1000; // refresh the Google access token 5 minutes before it expires
 
-    const now = Date.now();
-    const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-
-    if (decoded.tokenExpiry - now < bufferTime) {
-      console.log('Access token expired or expiring soon, refreshing...');
-      
-      const newTokens = await refreshAccessToken(decoded.refreshToken);
-      
-      if (newTokens) {
-        const newPayload: TokenPayload = {
-          ...decoded,
-          accessToken: newTokens.accessToken,
-          refreshToken: newTokens.refreshToken,
-          tokenExpiry: newTokens.tokenExpiry,
-        };
-
-        const newJwt = jwt.sign(newPayload, config.jwt.secret, {
-          expiresIn: config.jwt.expiresIn as jwt.SignOptions['expiresIn'],
-        });
-
-        res.cookie('token', newJwt, {
-          httpOnly: true,
-          secure: config.nodeEnv === 'production',
-          sameSite: config.nodeEnv === 'production' ? 'none' : 'lax',
-          maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
-
-        res.setHeader('x-new-token', newJwt);
-
-        req.accessToken = newTokens.accessToken;
-        req.refreshToken = newTokens.refreshToken;
-        req.tokenExpiry = newTokens.tokenExpiry;
-      } else {
-        return res.status(401).json({
-          success: false,
-          message: 'Session expired. Please login again.',
-        });
-      }
-    } else {
-      req.accessToken = decoded.accessToken;
-      req.refreshToken = decoded.refreshToken;
-      req.tokenExpiry = decoded.tokenExpiry;
+  if (session.tokenExpiry - Date.now() < bufferTime) {
+    const newTokens = await refreshAccessToken(session.refreshToken);
+    if (!newTokens) {
+      return res.status(401).json({
+        success: false,
+        message: 'Session expired. Please sign in again.',
+      });
     }
-
-    req.userId = decoded.userId;
-    req.userEmail = decoded.email;
-    next();
-  } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid or expired token',
-    });
+    current = { ...session, ...newTokens };
+    // Clients that cannot use the cookie (Safari) pick the new session up from this header.
+    res.setHeader('x-new-token', issueSession(res, current));
   }
+
+  req.accessToken = current.accessToken;
+  req.refreshToken = current.refreshToken;
+  req.tokenExpiry = current.tokenExpiry;
+  req.userId = current.userId;
+  req.userEmail = current.email;
+  next();
 }
 
 export function checkAuth(req: AuthRequest, res: Response) {
-  const token = req.cookies?.token || req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
-
-  if (!token) {
+  const { session } = readSession(req);
+  if (!session) {
     return res.json({ authenticated: false });
   }
-
-  try {
-    const decoded = jwt.verify(token, config.jwt.secret) as TokenPayload;
-    return res.json({
-      authenticated: true,
-      user: {
-        id: decoded.userId,
-        email: decoded.email,
-        name: decoded.name,
-        picture: decoded.picture,
-      },
-    });
-  } catch (error) {
-    return res.json({ authenticated: false });
-  }
+  return res.json({
+    authenticated: true,
+    user: {
+      id: session.userId,
+      email: session.email,
+      name: session.name,
+      picture: session.picture,
+    },
+  });
 }
