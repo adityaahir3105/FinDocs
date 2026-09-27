@@ -134,6 +134,7 @@ export async function googleLogin(req: Request, res: Response) {
 
     return res.json({
       success: true,
+      token,
       user: {
         id: userInfo.id,
         email: userInfo.email,
@@ -220,6 +221,8 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
           sameSite: config.nodeEnv === 'production' ? 'none' : 'lax',
           maxAge: 7 * 24 * 60 * 60 * 1000,
         });
+
+        res.setHeader('x-new-token', newJwt);
 
         req.accessToken = newTokens.accessToken;
         req.refreshToken = newTokens.refreshToken;

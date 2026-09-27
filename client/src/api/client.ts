@@ -15,18 +15,64 @@ const api = axios.create({
   withCredentials: true,
 });
 
-export async function googleLogin(code: string): Promise<{ success: boolean; user?: User; message?: string }> {
+// Attach Authorization header if token is stored (resolves Safari / iOS third-party cookie blocking)
+api.interceptors.request.use((reqConfig) => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  if (token) {
+    reqConfig.headers = reqConfig.headers || {};
+    reqConfig.headers.Authorization = `Bearer ${token}`;
+  }
+  return reqConfig;
+});
+
+// Capture refreshed tokens or clear on 401
+api.interceptors.response.use(
+  (response) => {
+    const newToken = response.headers?.['x-new-token'];
+    if (newToken && typeof window !== 'undefined') {
+      localStorage.setItem('auth_token', newToken);
+    }
+    return response;
+  },
+  (error) => {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+    }
+    return Promise.reject(error);
+  }
+);
+
+export async function googleLogin(code: string): Promise<{ success: boolean; user?: User; token?: string; message?: string }> {
   const response = await api.post('/auth/google', { code });
+  if (response.data?.token && typeof window !== 'undefined') {
+    localStorage.setItem('auth_token', response.data.token);
+  }
   return response.data;
 }
 
 export async function logout(): Promise<void> {
-  await api.post('/auth/logout');
+  try {
+    await api.post('/auth/logout');
+  } finally {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+    }
+  }
 }
 
 export async function checkAuth(): Promise<{ authenticated: boolean; user?: User }> {
-  const response = await api.get('/auth/check');
-  return response.data;
+  try {
+    const response = await api.get('/auth/check');
+    if (!response.data?.authenticated && typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+    }
+    return response.data;
+  } catch (error) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auth_token');
+    }
+    return { authenticated: false };
+  }
 }
 
 export async function getSubmissionHistory(): Promise<{ success: boolean; data?: SubmissionSummary[]; message?: string }> {

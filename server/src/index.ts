@@ -21,6 +21,7 @@ app.use(cors({
     'https://fin-docs-hazel.vercel.app'
   ],
   credentials: true,
+  exposedHeaders: ['x-new-token'],
 }));
 
 app.use(cookieParser());
