@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./client/package-lock.json)",
+      "Read(./server/package-lock.json)",
+      "Read(./client/dist/**)",
+      "Read(./server/dist/**)",
+      "Read(./**/.env)"
+    ]
+  }
+}
